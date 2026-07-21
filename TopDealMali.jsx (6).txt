@@ -1,0 +1,899 @@
+import React, { useState, useEffect, useMemo } from "react";
+import {
+  ShoppingBag, Plus, Minus, X, MessageCircle, Truck, Smartphone, Check,
+  ChevronRight, ChevronDown, Sparkles, Flame, Award, ShieldCheck, Clock,
+  Headphones, Instagram, Facebook, Music2, MapPin, Home as HomeIcon, Store,
+  Heart, Search, Package, User, Settings, Star, Tag, Lock, Trash2, Pencil,
+} from "lucide-react";
+
+// ====== CONFIG — à adapter par Cheick ======
+const WHATSAPP_NUMBER = "22300000000"; // ⚠️ remplace par le vrai numéro WhatsApp
+const STORE_NAME = "Top Deal Mali";
+const ADMIN_PIN = "2026"; // ⚠️ change ce code pour protéger le tableau de bord
+const SOCIAL = {
+  tiktok: "https://www.tiktok.com/@topdealmali",
+  facebook: "https://www.facebook.com/topdealmali",
+  instagram: "https://www.instagram.com/topdealmali",
+};
+const PICKUP_MAP_QUERY = "Bamako, Mali"; // ⚠️ remplace par ton adresse exacte
+
+const DEFAULT_PRODUCTS = [
+  { id: "p1", name: "Ensemble pantalon jazz coton", category: "Mode", price: 12500, desc: "Coupe ample, coton respirant, plusieurs coloris", emoji: "👖", isNew: true },
+  { id: "p2", name: "Hoodie Nike Therma-FIT", category: "Mode", price: 22000, desc: "Doublure polaire, capuche doublée, coupe régulière", emoji: "🧥", isBestSeller: true },
+  { id: "p3", name: "Bonnet Nike Dri-FIT", category: "Mode", price: 6500, desc: "Tissu technique, évacuation de la transpiration", emoji: "🧢", isNew: true },
+  { id: "p4", name: "T-shirt oversize tendance", category: "Mode", price: 7500, desc: "Coton lourd 220g, coupe oversize, 4 coloris", emoji: "👕", isPopular: true },
+  { id: "p5", name: "Écouteurs sans fil", category: "Général", price: 9500, desc: "Bluetooth 5.3, autonomie 20h avec boîtier", emoji: "🎧", isPopular: true, isBestSeller: true },
+  { id: "p6", name: "Powerbank 20000mAh", category: "Général", price: 13000, desc: "Charge rapide, double port USB", emoji: "🔋", isNew: true },
+  { id: "p7", name: "Montre connectée", category: "Général", price: 17500, desc: "Suivi santé, notifications, étanche", emoji: "⌚", isPopular: true, isBestSeller: true },
+  { id: "p8", name: "Sac à main tissé", category: "Mode", price: 11000, desc: "Fait main, fermeture zip, doublure intérieure", emoji: "👜", isPopular: true },
+];
+
+const DEFAULT_PROMOS = [{ code: "BIENVENUE10", percent: 10, active: true }];
+const DEFAULT_ZONES = [
+  { zone: "Bamako - Centre", fee: 1000 },
+  { zone: "Bamako - Périphérie", fee: 1500 },
+  { zone: "Hors Bamako", fee: 3000 },
+];
+const CATEGORIES = ["Tout", "Mode", "Général"];
+const PAYMENT_METHODS = [
+  { id: "cod", label: "Paiement à la livraison", sub: "Espèces, vous payez à la réception", icon: Truck },
+  { id: "orange", label: "Orange Money", sub: "Paiement mobile avant livraison", icon: Smartphone },
+  { id: "moov", label: "Moov Money", sub: "Paiement mobile avant livraison", icon: Smartphone },
+  { id: "wave", label: "Wave", sub: "Paiement mobile avant livraison", icon: Smartphone },
+];
+const MERCHANT_ACCOUNTS = {
+  orange: { name: "Orange Money", number: "07 00 00 00 00" },
+  moov: { name: "Moov Money", number: "01 00 00 00 00" },
+  wave: { name: "Wave", number: "07 00 00 00 00" },
+};
+const WHY_US = [
+  { icon: ShieldCheck, title: "Paiement à la livraison", text: "Vous vérifiez le produit avant de payer. Zéro avance exigée." },
+  { icon: Award, title: "Produits vérifiés", text: "Chaque article est contrôlé avant expédition, originaux garantis." },
+  { icon: Clock, title: "Livraison rapide", text: "24 à 48h à Bamako selon votre quartier." },
+  { icon: Headphones, title: "Réponse rapide", text: "Une question ? On répond sur WhatsApp en quelques minutes." },
+];
+const FAQ = [
+  { q: "Comment fonctionne le paiement à la livraison ?", a: "Vous passez votre commande, on vous livre à l'adresse indiquée, vous vérifiez le produit et vous payez seulement si vous êtes satisfait." },
+  { q: "Quelles zones livrez-vous ?", a: "Nous livrons à Bamako et ses environs. Les frais varient selon la zone, affichés au moment du paiement." },
+  { q: "Combien de temps prend la livraison ?", a: "En général 24 à 48h à Bamako selon votre quartier." },
+  { q: "Puis-je payer par Orange Money, Moov Money ou Wave ?", a: "Oui. Les instructions vous sont données avant la confirmation finale sur WhatsApp." },
+  { q: "Que faire si le produit ne me convient pas ?", a: "Consultez notre politique de retour ci-dessous, ou contactez-nous directement sur WhatsApp avec une photo du produit." },
+];
+const STATUSES = ["En attente", "Confirmée", "En livraison", "Livrée", "Annulée"];
+const STATUS_COLOR = { "En attente": "#D4A017", "Confirmée": "#2E4374", "En livraison": "#8B4226", "Livrée": "#3C7A4F", "Annulée": "#B5502E" };
+
+function formatFCFA(n) { return (n || 0).toLocaleString("fr-FR") + " FCFA"; }
+function uid() { return Math.random().toString(36).slice(2, 10); }
+
+// Convertit un lien de partage Google Drive en lien d'image affichable directement
+function toDirectImageUrl(url) {
+  if (!url) return url;
+  const trimmed = url.trim();
+  if (trimmed.includes("drive.google.com")) {
+    const match = trimmed.match(/\/d\/([a-zA-Z0-9_-]+)/) || trimmed.match(/id=([a-zA-Z0-9_-]+)/);
+    if (match) return `https://drive.google.com/uc?export=view&id=${match[1]}`;
+  }
+  return trimmed;
+}
+function parseImageUrls(raw) {
+  return (raw || "")
+    .split(",")
+    .map((u) => toDirectImageUrl(u))
+    .filter(Boolean);
+}
+
+// Affiche la première photo du produit, ou l'emoji si aucune photo n'est renseignée
+function ProductThumb({ p, className, textSize = "text-4xl" }) {
+  const [errored, setErrored] = useState(false);
+  const hasImage = p.images && p.images.length > 0 && !errored;
+  if (hasImage) {
+    return (
+      <img
+        src={p.images[0]}
+        alt={p.name}
+        onError={() => setErrored(true)}
+        className={`${className} object-cover`}
+        loading="lazy"
+      />
+    );
+  }
+  return (
+    <div className={`${className} flex items-center justify-center ${textSize}`} style={{ background: "#EDE8D9" }}>
+      {p.emoji}
+    </div>
+  );
+}
+
+async function storageGet(key, shared, fallback) {
+  try {
+    const r = await window.storage.get(key, shared);
+    return r ? JSON.parse(r.value) : fallback;
+  } catch { return fallback; }
+}
+async function storageSet(key, value, shared) {
+  try { await window.storage.set(key, JSON.stringify(value), shared); } catch (e) { console.error("storage set failed", e); }
+}
+
+function badgeFor(p) {
+  if (p.isBestSeller) return { text: "MEILLEURE VENTE", bg: "#B5502E" };
+  if (p.isNew) return { text: "NOUVEAU", bg: "#2E4374" };
+  if (p.isPopular) return { text: "POPULAIRE", bg: "#D4A017" };
+  return null;
+}
+function avgRating(reviews) {
+  if (!reviews || reviews.length === 0) return null;
+  return reviews.reduce((s, r) => s + r.rating, 0) / reviews.length;
+}
+
+function Stars({ value, size = 12 }) {
+  return (
+    <div className="flex gap-0.5">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <Star key={i} size={size} fill={i <= Math.round(value) ? "#D4A017" : "none"} color="#D4A017" />
+      ))}
+    </div>
+  );
+}
+
+function ProductCard({ p, qty, onAdd, onChange, compact, wishlist, onToggleWish, reviews, onOpen }) {
+  const badge = badgeFor(p);
+  const rating = avgRating(reviews);
+  const wished = wishlist.includes(p.id);
+  return (
+    <div className={`relative rounded-2xl p-3 flex flex-col ${compact ? "w-40 shrink-0" : ""}`} style={{ background: "#F7F3E7", border: "1px solid #DDD5BE" }}>
+      <button onClick={() => onToggleWish(p.id)} className="absolute top-3 left-3 z-10 p-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.85)" }} aria-label="Ajouter aux favoris">
+        <Heart size={14} fill={wished ? "#B5502E" : "none"} color="#B5502E" />
+      </button>
+      <div
+        className="absolute top-3 right-3 w-14 h-14 rounded-full border-2 border-dashed flex items-center justify-center text-center leading-tight select-none pointer-events-none"
+        style={{ borderColor: "#8B4226", color: "#8B4226", transform: "rotate(-12deg)", fontFamily: "'Space Grotesk', sans-serif", fontSize: "6px", fontWeight: 800, background: "rgba(237,232,214,0.6)", textTransform: "uppercase" }}
+      >
+        Payé à<br />la livraison
+      </div>
+      <button onClick={() => onOpen(p.id)} className="w-full block mb-2">
+        <ProductThumb p={p} className="w-full aspect-square rounded-xl" />
+      </button>
+      {badge && <span className="self-start px-2 py-0.5 rounded-full text-[10px] font-bold mb-1" style={{ background: badge.bg, color: "#fff" }}>{badge.text}</span>}
+      <button onClick={() => onOpen(p.id)} className="text-sm font-semibold leading-snug mb-0.5 text-left">{p.name}</button>
+      {rating ? (
+        <div className="flex items-center gap-1 mb-1">
+          <Stars value={rating} size={10} />
+          <span className="text-[10px]" style={{ color: "#6B6252" }}>({reviews.length})</span>
+        </div>
+      ) : (
+        <div className="text-[11px] mb-2" style={{ color: "#6B6252" }}>{p.desc}</div>
+      )}
+      <div className="mt-auto flex items-center justify-between">
+        <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 600, fontSize: "13px", color: "#8B4226" }}>{formatFCFA(p.price)}</span>
+        {qty ? (
+          <div className="flex items-center gap-1.5" style={{ background: "#201C15", borderRadius: 999, padding: "2px 6px" }}>
+            <button onClick={() => onChange(p.id, -1)} aria-label="Retirer un"><Minus size={13} color="#EDE8D9" /></button>
+            <span style={{ color: "#EDE8D9", fontSize: 12, minWidth: 12, textAlign: "center", fontFamily: "'IBM Plex Mono', monospace" }}>{qty}</span>
+            <button onClick={() => onChange(p.id, 1)} aria-label="Ajouter un"><Plus size={13} color="#EDE8D9" /></button>
+          </div>
+        ) : (
+          <button onClick={() => onAdd(p.id)} className="p-1.5 rounded-full" style={{ background: "#201C15" }} aria-label={`Ajouter ${p.name} au panier`}><Plus size={14} color="#EDE8D9" /></button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function HorizontalSection({ title, icon: Icon, products, cart, onAdd, onChange, wishlist, onToggleWish, reviewsMap, onOpen }) {
+  if (products.length === 0) return null;
+  return (
+    <section className="pt-5">
+      <div className="px-4 flex items-center gap-2 mb-3">
+        <Icon size={16} color="#B5502E" />
+        <h2 style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 800, fontSize: 16 }}>{title}</h2>
+      </div>
+      <div className="flex gap-3 px-4 overflow-x-auto pb-1">
+        {products.map((p) => (
+          <ProductCard key={p.id} p={p} qty={cart[p.id]} onAdd={onAdd} onChange={onChange} compact wishlist={wishlist} onToggleWish={onToggleWish} reviews={reviewsMap[p.id]} onOpen={onOpen} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+const pill = (active) => ({ background: active ? "#201C15" : "transparent", color: active ? "#EDE8D9" : "#201C15", border: active ? "1.5px solid #201C15" : "1.5px solid #201C15" });
+const inputStyle = { background: "#EDE8D9", border: "1.5px solid #DDD5BE" };
+const card = { background: "#F7F3E7", border: "1px solid #DDD5BE" };
+
+export default function TopDealMali() {
+  const [loaded, setLoaded] = useState(false);
+  const [view, setView] = useState("home");
+  const [category, setCategory] = useState("Tout");
+  const [query, setQuery] = useState("");
+
+  const [products, setProducts] = useState(DEFAULT_PRODUCTS);
+  const [reviews, setReviews] = useState({}); // { productId: [{id, author, rating, comment}] }
+  const [promoCodes, setPromoCodes] = useState(DEFAULT_PROMOS);
+  const [zones, setZones] = useState(DEFAULT_ZONES);
+  const [orders, setOrders] = useState([]);
+  const [customers, setCustomers] = useState({}); // { phone: {name, address} }
+  const [wishlist, setWishlist] = useState([]);
+
+  const [cart, setCart] = useState({});
+  const [cartOpen, setCartOpen] = useState(false);
+  const [checkoutStep, setCheckoutStep] = useState(0);
+  const [payment, setPayment] = useState(null);
+  const [zone, setZone] = useState(DEFAULT_ZONES[0].zone);
+  const [promoInput, setPromoInput] = useState("");
+  const [appliedPromo, setAppliedPromo] = useState(null);
+  const [promoError, setPromoError] = useState("");
+  const [customer, setCustomer] = useState({ name: "", phone: "", address: "" });
+
+  const [openFaq, setOpenFaq] = useState(null);
+  const [openProductId, setOpenProductId] = useState(null);
+  const [reviewForm, setReviewForm] = useState({ author: "", rating: 5, comment: "" });
+
+  const [trackPhone, setTrackPhone] = useState("");
+  const [accountPhone, setAccountPhone] = useState("");
+  const [accountLoggedIn, setAccountLoggedIn] = useState(false);
+  const [accountForm, setAccountForm] = useState({ name: "", address: "" });
+
+  const [adminPinInput, setAdminPinInput] = useState("");
+  const [adminUnlocked, setAdminUnlocked] = useState(false);
+  const [adminTab, setAdminTab] = useState("commandes");
+  const [editingProduct, setEditingProduct] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      setProducts(await storageGet("products", true, DEFAULT_PRODUCTS));
+      setReviews(await storageGet("reviews", true, {}));
+      setPromoCodes(await storageGet("promocodes", true, DEFAULT_PROMOS));
+      setZones(await storageGet("deliveryZones", true, DEFAULT_ZONES));
+      setOrders(await storageGet("orders", true, []));
+      setCustomers(await storageGet("customers", true, {}));
+      setWishlist(await storageGet("wishlist", false, []));
+      setLoaded(true);
+    })();
+  }, []);
+
+  const filtered = useMemo(() => {
+    let list = category === "Tout" ? products : products.filter((p) => p.category === category);
+    if (query.trim()) list = list.filter((p) => p.name.toLowerCase().includes(query.trim().toLowerCase()));
+    return list;
+  }, [category, query, products]);
+
+  const newProducts = useMemo(() => products.filter((p) => p.isNew), [products]);
+  const popularProducts = useMemo(() => products.filter((p) => p.isPopular), [products]);
+  const bestSellers = useMemo(() => products.filter((p) => p.isBestSeller), [products]);
+  const wishedProducts = useMemo(() => products.filter((p) => wishlist.includes(p.id)), [products, wishlist]);
+
+  const cartItems = useMemo(() => Object.entries(cart).filter(([, qty]) => qty > 0).map(([id, qty]) => ({ ...products.find((p) => p.id === id), qty })), [cart, products]);
+  const subtotal = cartItems.reduce((s, i) => s + i.price * i.qty, 0);
+  const cartCount = cartItems.reduce((s, i) => s + i.qty, 0);
+  const deliveryFee = zones.find((z) => z.zone === zone)?.fee || 0;
+  const discountAmount = appliedPromo ? Math.round((subtotal * appliedPromo.percent) / 100) : 0;
+  const grandTotal = Math.max(0, subtotal - discountAmount + deliveryFee);
+
+  function addToCart(id) { setCart((c) => ({ ...c, [id]: (c[id] || 0) + 1 })); }
+  function changeQty(id, delta) { setCart((c) => ({ ...c, [id]: Math.max(0, (c[id] || 0) + delta) })); }
+  function openCart() { setCartOpen(true); setCheckoutStep(0); }
+  function closeCart() { setCartOpen(false); }
+
+  async function toggleWish(id) {
+    const next = wishlist.includes(id) ? wishlist.filter((x) => x !== id) : [...wishlist, id];
+    setWishlist(next);
+    await storageSet("wishlist", next, false);
+  }
+
+  async function submitReview(productId) {
+    if (!reviewForm.author.trim() || !reviewForm.comment.trim()) return;
+    const next = { ...reviews, [productId]: [...(reviews[productId] || []), { id: uid(), ...reviewForm }] };
+    setReviews(next);
+    await storageSet("reviews", next, true);
+    setReviewForm({ author: "", rating: 5, comment: "" });
+  }
+
+  function applyPromo() {
+    const found = promoCodes.find((p) => p.code.toLowerCase() === promoInput.trim().toLowerCase() && p.active);
+    if (found) { setAppliedPromo(found); setPromoError(""); }
+    else { setAppliedPromo(null); setPromoError("Code promo invalide ou expiré."); }
+  }
+
+  function goToNextAfterPayment() { setCheckoutStep(payment === "cod" ? 3 : 2); }
+
+  function buildWhatsAppMessage(order) {
+    const methodLabel = PAYMENT_METHODS.find((m) => m.id === order.payment)?.label || "";
+    const lines = [
+      `Bonjour ${STORE_NAME} 👋, je souhaite commander (réf ${order.id}) :`, "",
+      ...order.items.map((i) => `• ${i.name} x${i.qty} — ${formatFCFA(i.price * i.qty)}`), "",
+      `Sous-total : ${formatFCFA(order.subtotal)}`,
+      order.discountAmount ? `Réduction (${order.promoCode}) : -${formatFCFA(order.discountAmount)}` : "",
+      `Livraison (${order.zone}) : ${formatFCFA(order.deliveryFee)}`,
+      `Total : ${formatFCFA(order.total)}`,
+      `Paiement : ${methodLabel}`,
+      order.payment !== "cod" ? "(J'ai effectué le paiement mobile, merci de confirmer.)" : "", "",
+      `Nom : ${order.customer.name}`, `Téléphone : ${order.customer.phone}`, `Adresse : ${order.customer.address}`,
+    ].filter(Boolean);
+    return encodeURIComponent(lines.join("\n"));
+  }
+
+  async function sendToWhatsApp() {
+    const order = {
+      id: uid().toUpperCase(), date: new Date().toISOString(), items: cartItems, subtotal,
+      discountAmount, promoCode: appliedPromo?.code || null, zone, deliveryFee, total: grandTotal,
+      payment, customer, status: "En attente",
+    };
+    const nextOrders = [order, ...orders];
+    setOrders(nextOrders);
+    await storageSet("orders", nextOrders, true);
+    const nextCustomers = { ...customers, [customer.phone]: { name: customer.name, address: customer.address } };
+    setCustomers(nextCustomers);
+    await storageSet("customers", nextCustomers, true);
+    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${buildWhatsAppMessage(order)}`, "_blank");
+    setCart({}); setAppliedPromo(null); setPromoInput(""); setCheckoutStep(0); setCartOpen(false);
+  }
+
+  async function updateOrderStatus(orderId, status) {
+    const next = orders.map((o) => (o.id === orderId ? { ...o, status } : o));
+    setOrders(next);
+    await storageSet("orders", next, true);
+  }
+
+  async function saveProduct(rawP) {
+    const { imagesInput, ...rest } = rawP;
+    const p = { ...rest, images: parseImageUrls(imagesInput !== undefined ? imagesInput : (rawP.images || []).join(", ")) };
+    let next;
+    if (products.find((x) => x.id === p.id)) next = products.map((x) => (x.id === p.id ? p : x));
+    else next = [...products, p];
+    setProducts(next);
+    await storageSet("products", next, true);
+    setEditingProduct(null);
+  }
+  async function deleteProduct(id) {
+    const next = products.filter((p) => p.id !== id);
+    setProducts(next);
+    await storageSet("products", next, true);
+  }
+  async function addPromo(code, percent) {
+    if (!code.trim()) return;
+    const next = [...promoCodes, { code: code.trim().toUpperCase(), percent: Number(percent) || 0, active: true }];
+    setPromoCodes(next);
+    await storageSet("promocodes", next, true);
+  }
+  async function togglePromo(code) {
+    const next = promoCodes.map((p) => (p.code === code ? { ...p, active: !p.active } : p));
+    setPromoCodes(next);
+    await storageSet("promocodes", next, true);
+  }
+  async function updateZoneFee(zoneName, fee) {
+    const next = zones.map((z) => (z.zone === zoneName ? { ...z, fee: Number(fee) || 0 } : z));
+    setZones(next);
+    await storageSet("deliveryZones", next, true);
+  }
+
+  const canGoToPayment = cartItems.length > 0;
+  const canConfirm = payment && customer.name.trim() && customer.phone.trim() && customer.address.trim();
+  const reviewsMap = reviews;
+  const openProduct = products.find((p) => p.id === openProductId);
+  const myOrders = orders.filter((o) => o.customer.phone === trackPhone.trim());
+  const accountOrders = orders.filter((o) => o.customer.phone === accountPhone.trim());
+
+  if (!loaded) {
+    return <div className="min-h-screen flex items-center justify-center" style={{ background: "#EDE8D9", color: "#201C15" }}>Chargement…</div>;
+  }
+
+  return (
+    <div className="min-h-screen w-full" style={{ background: "#EDE8D9", fontFamily: "'Inter', sans-serif", color: "#201C15" }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');`}</style>
+
+      <header className="sticky top-0 z-20 px-4 py-3 flex items-center justify-between" style={{ background: "#201C15", color: "#EDE8D9" }}>
+        <button onClick={() => setView("home")} className="text-left">
+          <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 800, fontSize: "20px", letterSpacing: "-0.01em" }}>TOP DEAL <span style={{ color: "#D4A017" }}>MALI</span></div>
+          <div style={{ fontSize: "10px", color: "#B9AF95", fontWeight: 500, letterSpacing: "0.03em" }}>BAMAKO · PAIEMENT À LA LIVRAISON DISPONIBLE</div>
+        </button>
+        <button onClick={openCart} className="relative p-2 rounded-full" style={{ background: "#2E4374" }} aria-label="Voir le panier">
+          <ShoppingBag size={20} color="#EDE8D9" />
+          {cartCount > 0 && <span className="absolute -top-1 -right-1 rounded-full flex items-center justify-center" style={{ background: "#B5502E", color: "#fff", fontSize: "11px", fontWeight: 700, width: 20, height: 20, fontFamily: "'IBM Plex Mono', monospace" }}>{cartCount}</span>}
+        </button>
+      </header>
+
+      <div className="flex gap-2 px-4 pt-3 overflow-x-auto pb-1">
+        <button onClick={() => setView("home")} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold shrink-0" style={pill(view === "home")}><HomeIcon size={13} /> Accueil</button>
+        <button onClick={() => setView("catalog")} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold shrink-0" style={pill(view === "catalog")}><Store size={13} /> Boutique</button>
+        <button onClick={() => setView("wishlist")} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold shrink-0" style={pill(view === "wishlist")}><Heart size={13} /> Souhaits</button>
+        <button onClick={() => setView("tracking")} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold shrink-0" style={pill(view === "tracking")}><Package size={13} /> Suivi</button>
+        <button onClick={() => setView("account")} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold shrink-0" style={pill(view === "account")}><User size={13} /> Compte</button>
+        <button onClick={() => setView("admin")} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold shrink-0" style={pill(view === "admin")}><Settings size={13} /> Admin</button>
+      </div>
+
+      {view === "home" && (
+        <>
+          <div className="mx-4 mt-4 rounded-3xl p-6 relative overflow-hidden" style={{ background: "#B5502E", color: "#fff" }}>
+            <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 800, fontSize: 26, lineHeight: 1.15 }}>Vos deals à Bamako,<br />sans risque.</div>
+            <p className="text-sm mt-2 mb-4" style={{ color: "#F7DFD3" }}>Vous vérifiez le produit à la livraison, vous payez seulement si ça vous plaît.</p>
+            <button onClick={() => setView("catalog")} className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold" style={{ background: "#201C15", color: "#EDE8D9" }}>Voir les produits <ChevronRight size={16} /></button>
+          </div>
+
+          <HorizontalSection title="Nouveautés" icon={Sparkles} products={newProducts} cart={cart} onAdd={addToCart} onChange={changeQty} wishlist={wishlist} onToggleWish={toggleWish} reviewsMap={reviewsMap} onOpen={setOpenProductId} />
+          <HorizontalSection title="Produits populaires" icon={Flame} products={popularProducts} cart={cart} onAdd={addToCart} onChange={changeQty} wishlist={wishlist} onToggleWish={toggleWish} reviewsMap={reviewsMap} onOpen={setOpenProductId} />
+          <HorizontalSection title="Meilleures ventes" icon={Award} products={bestSellers} cart={cart} onAdd={addToCart} onChange={changeQty} wishlist={wishlist} onToggleWish={toggleWish} reviewsMap={reviewsMap} onOpen={setOpenProductId} />
+
+          <section className="px-4 pt-6">
+            <h2 style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 800, fontSize: 16 }} className="mb-3">Pourquoi choisir {STORE_NAME} ?</h2>
+            <div className="grid grid-cols-2 gap-3">
+              {WHY_US.map((w) => { const Icon = w.icon; return (
+                <div key={w.title} className="rounded-2xl p-3" style={card}>
+                  <Icon size={18} color="#B5502E" />
+                  <div className="text-sm font-bold mt-1.5">{w.title}</div>
+                  <div className="text-[11px] mt-0.5" style={{ color: "#6B6252" }}>{w.text}</div>
+                </div>
+              );})}
+            </div>
+          </section>
+
+          <section className="px-4 pt-6">
+            <h2 style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 800, fontSize: 16 }} className="mb-3">Questions fréquentes</h2>
+            <div className="space-y-2">
+              {FAQ.map((f, idx) => (
+                <div key={idx} className="rounded-2xl overflow-hidden" style={card}>
+                  <button onClick={() => setOpenFaq(openFaq === idx ? null : idx)} className="w-full flex items-center justify-between p-3 text-left text-sm font-semibold">
+                    {f.q}<ChevronDown size={16} style={{ transform: openFaq === idx ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+                  </button>
+                  {openFaq === idx && <div className="px-3 pb-3 text-[12px]" style={{ color: "#6B6252" }}>{f.a}</div>}
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="px-4 pt-6">
+            <h2 style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 800, fontSize: 16 }} className="mb-3">Politique de retour</h2>
+            <div className="rounded-2xl p-4 text-[12px] leading-relaxed" style={{ ...card, color: "#6B6252" }}>
+              Vous avez 24h après réception pour signaler un défaut ou une erreur sur votre commande. Le produit doit être non utilisé et dans son emballage d'origine. Contactez-nous sur WhatsApp avec une photo du produit pour lancer un retour ou un échange.
+            </div>
+          </section>
+
+          <section className="px-4 pt-6">
+            <div className="flex items-center gap-2 mb-3"><MapPin size={16} color="#B5502E" /><h2 style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 800, fontSize: 16 }}>Point de retrait</h2></div>
+            <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid #DDD5BE" }}>
+              <iframe title="Point de retrait" width="100%" height="200" style={{ border: 0, display: "block" }} loading="lazy" src={`https://www.google.com/maps?q=${encodeURIComponent(PICKUP_MAP_QUERY)}&output=embed`} />
+            </div>
+            <p className="text-[11px] mt-2" style={{ color: "#6B6252" }}>⚠️ Adresse d'exemple — remplace <code>PICKUP_MAP_QUERY</code> par ton vrai point de retrait.</p>
+          </section>
+
+          <section className="px-4 py-6">
+            <h2 style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 800, fontSize: 16 }} className="mb-3">Suivez-nous</h2>
+            <div className="flex gap-3">
+              <a href={SOCIAL.tiktok} target="_blank" rel="noopener noreferrer" className="p-3 rounded-full" style={{ background: "#201C15" }} aria-label="TikTok"><Music2 size={18} color="#EDE8D9" /></a>
+              <a href={SOCIAL.facebook} target="_blank" rel="noopener noreferrer" className="p-3 rounded-full" style={{ background: "#201C15" }} aria-label="Facebook"><Facebook size={18} color="#EDE8D9" /></a>
+              <a href={SOCIAL.instagram} target="_blank" rel="noopener noreferrer" className="p-3 rounded-full" style={{ background: "#201C15" }} aria-label="Instagram"><Instagram size={18} color="#EDE8D9" /></a>
+            </div>
+          </section>
+        </>
+      )}
+
+      {view === "catalog" && (
+        <>
+          <div className="px-4 pt-4">
+            <div className="flex items-center gap-2 rounded-full px-3 py-2" style={{ background: "#F7F3E7", border: "1px solid #DDD5BE" }}>
+              <Search size={16} color="#6B6252" />
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher un produit…" className="flex-1 bg-transparent text-sm outline-none" />
+            </div>
+          </div>
+          <nav className="px-4 pt-3 pb-2 flex gap-2">
+            {CATEGORIES.map((c) => (
+              <button key={c} onClick={() => setCategory(c)} className="px-4 py-1.5 rounded-full text-sm font-semibold" style={category === c ? { background: "#B5502E", color: "#fff" } : { border: "1.5px solid #201C15" }}>{c}</button>
+            ))}
+          </nav>
+          <main className="px-4 pb-28 pt-2 grid grid-cols-2 gap-3 max-w-2xl mx-auto">
+            {filtered.map((p) => (
+              <ProductCard key={p.id} p={p} qty={cart[p.id]} onAdd={addToCart} onChange={changeQty} wishlist={wishlist} onToggleWish={toggleWish} reviews={reviewsMap[p.id]} onOpen={setOpenProductId} />
+            ))}
+            {filtered.length === 0 && <div className="col-span-2 text-center text-sm py-10" style={{ color: "#6B6252" }}>Aucun produit trouvé.</div>}
+          </main>
+        </>
+      )}
+
+      {view === "wishlist" && (
+        <main className="px-4 pb-28 pt-4 grid grid-cols-2 gap-3 max-w-2xl mx-auto">
+          {wishedProducts.length === 0 ? (
+            <div className="col-span-2 text-center text-sm py-10" style={{ color: "#6B6252" }}>Aucun favori pour l'instant. Touchez le ❤️ sur un produit pour l'ajouter.</div>
+          ) : wishedProducts.map((p) => (
+            <ProductCard key={p.id} p={p} qty={cart[p.id]} onAdd={addToCart} onChange={changeQty} wishlist={wishlist} onToggleWish={toggleWish} reviews={reviewsMap[p.id]} onOpen={setOpenProductId} />
+          ))}
+        </main>
+      )}
+
+      {view === "tracking" && (
+        <main className="px-4 pt-4 pb-28 max-w-2xl mx-auto">
+          <h2 style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 800, fontSize: 18 }} className="mb-3">Suivi de commande</h2>
+          <div className="flex gap-2 mb-4">
+            <input value={trackPhone} onChange={(e) => setTrackPhone(e.target.value)} placeholder="Votre numéro de téléphone" className="flex-1 p-2.5 rounded-lg text-sm" style={inputStyle} />
+          </div>
+          {trackPhone.trim() === "" ? (
+            <div className="text-sm" style={{ color: "#6B6252" }}>Entrez le numéro utilisé lors de votre commande.</div>
+          ) : myOrders.length === 0 ? (
+            <div className="text-sm" style={{ color: "#6B6252" }}>Aucune commande trouvée pour ce numéro.</div>
+          ) : (
+            <div className="space-y-3">
+              {myOrders.map((o) => (
+                <div key={o.id} className="rounded-2xl p-3" style={card}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-bold">Réf {o.id}</span>
+                    <span className="text-[11px] px-2 py-0.5 rounded-full font-bold" style={{ background: STATUS_COLOR[o.status], color: "#fff" }}>{o.status}</span>
+                  </div>
+                  <div className="text-[11px]" style={{ color: "#6B6252" }}>{new Date(o.date).toLocaleDateString("fr-FR")} · {o.items.length} article(s) · {formatFCFA(o.total)}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </main>
+      )}
+
+      {view === "account" && (
+        <main className="px-4 pt-4 pb-28 max-w-2xl mx-auto">
+          <h2 style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 800, fontSize: 18 }} className="mb-3">Mon compte</h2>
+          {!accountLoggedIn ? (
+            <>
+              <p className="text-[12px] mb-3" style={{ color: "#6B6252" }}>Entrez votre numéro de téléphone pour retrouver votre profil et vos commandes.</p>
+              <input value={accountPhone} onChange={(e) => setAccountPhone(e.target.value)} placeholder="Votre numéro de téléphone" className="w-full p-2.5 rounded-lg text-sm mb-3" style={inputStyle} />
+              <button
+                onClick={() => {
+                  const existing = customers[accountPhone.trim()];
+                  setAccountForm(existing ? { name: existing.name, address: existing.address } : { name: "", address: "" });
+                  setAccountLoggedIn(true);
+                }}
+                disabled={!accountPhone.trim()}
+                className="w-full py-3 rounded-xl font-bold text-sm"
+                style={{ background: accountPhone.trim() ? "#B5502E" : "#DDD5BE", color: "#fff" }}
+              >Continuer</button>
+            </>
+          ) : (
+            <>
+              <div className="rounded-2xl p-4 mb-4" style={card}>
+                <label className="text-xs font-semibold block mb-1">Nom</label>
+                <input value={accountForm.name} onChange={(e) => setAccountForm((f) => ({ ...f, name: e.target.value }))} className="w-full p-2.5 rounded-lg text-sm mb-3" style={inputStyle} />
+                <label className="text-xs font-semibold block mb-1">Adresse</label>
+                <input value={accountForm.address} onChange={(e) => setAccountForm((f) => ({ ...f, address: e.target.value }))} className="w-full p-2.5 rounded-lg text-sm mb-3" style={inputStyle} />
+                <button
+                  onClick={async () => { const next = { ...customers, [accountPhone.trim()]: accountForm }; setCustomers(next); await storageSet("customers", next, true); }}
+                  className="w-full py-2.5 rounded-xl font-bold text-sm"
+                  style={{ background: "#2E4374", color: "#fff" }}
+                >Enregistrer</button>
+              </div>
+              <h3 className="text-sm font-bold mb-2">Historique des commandes</h3>
+              {accountOrders.length === 0 ? (
+                <div className="text-sm" style={{ color: "#6B6252" }}>Aucune commande pour l'instant.</div>
+              ) : (
+                <div className="space-y-2">
+                  {accountOrders.map((o) => (
+                    <div key={o.id} className="rounded-xl p-3 flex items-center justify-between" style={card}>
+                      <span className="text-sm">Réf {o.id} · {formatFCFA(o.total)}</span>
+                      <span className="text-[11px] px-2 py-0.5 rounded-full font-bold" style={{ background: STATUS_COLOR[o.status], color: "#fff" }}>{o.status}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button onClick={() => setAccountLoggedIn(false)} className="text-xs mt-4 underline" style={{ color: "#6B6252" }}>Changer de numéro</button>
+            </>
+          )}
+        </main>
+      )}
+
+      {view === "admin" && (
+        <main className="px-4 pt-4 pb-28 max-w-2xl mx-auto">
+          {!adminUnlocked ? (
+            <div className="rounded-2xl p-5" style={card}>
+              <div className="flex items-center gap-2 mb-3"><Lock size={16} /><span className="text-sm font-bold">Accès réservé</span></div>
+              <input value={adminPinInput} onChange={(e) => setAdminPinInput(e.target.value)} type="password" placeholder="Code d'accès" className="w-full p-2.5 rounded-lg text-sm mb-3" style={inputStyle} />
+              <button onClick={() => setAdminUnlocked(adminPinInput === ADMIN_PIN)} className="w-full py-2.5 rounded-xl font-bold text-sm" style={{ background: "#201C15", color: "#EDE8D9" }}>Entrer</button>
+            </div>
+          ) : (
+            <>
+              <div className="flex gap-2 mb-4 overflow-x-auto">
+                {["commandes", "produits", "promo", "livraison"].map((t) => (
+                  <button key={t} onClick={() => setAdminTab(t)} className="px-3 py-1.5 rounded-full text-xs font-semibold capitalize shrink-0" style={pill(adminTab === t)}>{t}</button>
+                ))}
+              </div>
+
+              {adminTab === "commandes" && (
+                <div className="space-y-3">
+                  {orders.length === 0 && <div className="text-sm" style={{ color: "#6B6252" }}>Aucune commande.</div>}
+                  {orders.map((o) => (
+                    <div key={o.id} className="rounded-2xl p-3" style={card}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-bold">Réf {o.id} — {o.customer.name}</span>
+                        <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}>{formatFCFA(o.total)}</span>
+                      </div>
+                      <div className="text-[11px] mb-2" style={{ color: "#6B6252" }}>{o.customer.phone} · {o.customer.address}</div>
+                      <select value={o.status} onChange={(e) => updateOrderStatus(o.id, e.target.value)} className="text-xs p-2 rounded-lg w-full" style={inputStyle}>
+                        {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {adminTab === "produits" && (
+                <div className="space-y-3">
+                  <button
+                    onClick={() => setEditingProduct({ id: uid(), name: "", category: "Mode", price: 0, desc: "", emoji: "🛍️", images: [], imagesInput: "" })}
+                    className="w-full py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-1.5"
+                    style={{ background: "#2E4374", color: "#fff" }}
+                  ><Plus size={14} /> Ajouter un produit</button>
+
+                  {editingProduct && (
+                    <div className="rounded-2xl p-3 space-y-2" style={card}>
+                      <input placeholder="Nom" value={editingProduct.name} onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })} className="w-full p-2 rounded-lg text-sm" style={inputStyle} />
+                      <input placeholder="Emoji (utilisé si pas de photo)" value={editingProduct.emoji} onChange={(e) => setEditingProduct({ ...editingProduct, emoji: e.target.value })} className="w-full p-2 rounded-lg text-sm" style={inputStyle} />
+                      <textarea
+                        placeholder="Liens de photos (un ou plusieurs, séparés par des virgules)"
+                        value={editingProduct.imagesInput !== undefined ? editingProduct.imagesInput : (editingProduct.images || []).join(", ")}
+                        onChange={(e) => setEditingProduct({ ...editingProduct, imagesInput: e.target.value })}
+                        className="w-full p-2 rounded-lg text-sm"
+                        style={inputStyle}
+                        rows={2}
+                      />
+                      <div className="text-[10px] leading-relaxed" style={{ color: "#6B6252" }}>
+                        📸 Colle ici les liens de tes photos. Pour Google Drive : clic droit sur la photo → "Obtenir le lien" → "Tout le monde avec le lien" → colle le lien ici (converti automatiquement). Pour Imgur/Facebook, colle simplement le lien direct de l'image.
+                      </div>
+                      {(editingProduct.imagesInput || (editingProduct.images || []).join(", ")) && (
+                        <div className="flex gap-2 overflow-x-auto pt-1">
+                          {parseImageUrls(editingProduct.imagesInput !== undefined ? editingProduct.imagesInput : (editingProduct.images || []).join(", ")).map((u, i) => (
+                            <img key={i} src={u} alt="aperçu" className="w-14 h-14 rounded-lg object-cover shrink-0" style={{ border: "1px solid #DDD5BE" }} onError={(e) => { e.target.style.display = "none"; }} />
+                          ))}
+                        </div>
+                      )}
+                      <input placeholder="Description" value={editingProduct.desc} onChange={(e) => setEditingProduct({ ...editingProduct, desc: e.target.value })} className="w-full p-2 rounded-lg text-sm" style={inputStyle} />
+                      <input type="number" placeholder="Prix (FCFA)" value={editingProduct.price} onChange={(e) => setEditingProduct({ ...editingProduct, price: Number(e.target.value) })} className="w-full p-2 rounded-lg text-sm" style={inputStyle} />
+                      <select value={editingProduct.category} onChange={(e) => setEditingProduct({ ...editingProduct, category: e.target.value })} className="w-full p-2 rounded-lg text-sm" style={inputStyle}>
+                        <option>Mode</option><option>Général</option>
+                      </select>
+                      <div className="flex gap-2">
+                        <button onClick={() => setEditingProduct(null)} className="flex-1 py-2 rounded-lg text-sm font-semibold" style={{ background: "#EDE8D9", border: "1.5px solid #DDD5BE" }}>Annuler</button>
+                        <button onClick={() => saveProduct(editingProduct)} className="flex-1 py-2 rounded-lg text-sm font-bold" style={{ background: "#B5502E", color: "#fff" }}>Enregistrer</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {products.map((p) => (
+                    <div key={p.id} className="rounded-xl p-3 flex items-center gap-3" style={card}>
+                      <ProductThumb p={p} className="w-10 h-10 rounded-lg" textSize="text-xl" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-semibold truncate">{p.name}</div>
+                        <div className="text-[11px]" style={{ color: "#6B6252" }}>{formatFCFA(p.price)} · {p.category}</div>
+                      </div>
+                      <button onClick={() => setEditingProduct(p)} aria-label="Modifier"><Pencil size={16} /></button>
+                      <button onClick={() => deleteProduct(p.id)} aria-label="Supprimer"><Trash2 size={16} color="#B5502E" /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {adminTab === "promo" && (
+                <div className="space-y-3">
+                  <NewPromoForm onAdd={addPromo} />
+                  {promoCodes.map((p) => (
+                    <div key={p.code} className="rounded-xl p-3 flex items-center justify-between" style={card}>
+                      <div className="flex items-center gap-2">
+                        <Tag size={14} color="#B5502E" />
+                        <span className="text-sm font-semibold" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{p.code}</span>
+                        <span className="text-xs" style={{ color: "#6B6252" }}>-{p.percent}%</span>
+                      </div>
+                      <button onClick={() => togglePromo(p.code)} className="text-xs px-2 py-1 rounded-full font-bold" style={{ background: p.active ? "#3C7A4F" : "#B5502E", color: "#fff" }}>{p.active ? "Actif" : "Inactif"}</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {adminTab === "livraison" && (
+                <div className="space-y-3">
+                  {zones.map((z) => (
+                    <div key={z.zone} className="rounded-xl p-3 flex items-center justify-between gap-2" style={card}>
+                      <span className="text-sm">{z.zone}</span>
+                      <input type="number" defaultValue={z.fee} onBlur={(e) => updateZoneFee(z.zone, e.target.value)} className="w-28 p-2 rounded-lg text-sm text-right" style={inputStyle} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </main>
+      )}
+
+      {view === "home" && <div className="pb-24" />}
+
+      {cartCount > 0 && !cartOpen && (
+        <button onClick={openCart} className="fixed bottom-4 left-4 right-4 max-w-2xl mx-auto rounded-2xl px-4 py-3 flex items-center justify-between shadow-lg" style={{ background: "#B5502E", color: "#fff" }}>
+          <span className="text-sm font-semibold">{cartCount} article{cartCount > 1 ? "s" : ""} · {formatFCFA(subtotal)}</span>
+          <span className="flex items-center gap-1 text-sm font-bold">Commander <ChevronRight size={16} /></span>
+        </button>
+      )}
+
+      {openProductId && openProduct && (
+        <div className="fixed inset-0 z-30 flex items-end justify-center">
+          <div className="absolute inset-0" style={{ background: "rgba(32,28,21,0.55)" }} onClick={() => setOpenProductId(null)} />
+          <div className="relative w-full max-w-2xl rounded-t-3xl p-5 max-h-[85vh] overflow-y-auto" style={{ background: "#F7F3E7" }}>
+            <div className="flex items-center justify-between mb-3">
+              <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 800, fontSize: 18 }}>{openProduct.name}</span>
+              <button onClick={() => setOpenProductId(null)}><X size={22} /></button>
+            </div>
+            <ProductThumb p={openProduct} className="w-full aspect-square rounded-xl mb-2" textSize="text-6xl" />
+            {openProduct.images && openProduct.images.length > 1 && (
+              <div className="flex gap-2 overflow-x-auto mb-3">
+                {openProduct.images.map((u, i) => (
+                  <img key={i} src={u} alt={`${openProduct.name} ${i + 1}`} className="w-16 h-16 rounded-lg object-cover shrink-0" style={{ border: "1px solid #DDD5BE" }} />
+                ))}
+              </div>
+            )}
+            <p className="text-sm mb-2" style={{ color: "#6B6252" }}>{openProduct.desc}</p>
+            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, color: "#8B4226" }} className="mb-3">{formatFCFA(openProduct.price)}</div>
+            <div className="flex gap-2 mb-5">
+              <button onClick={() => toggleWish(openProduct.id)} className="flex-1 py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-1.5" style={{ background: "#EDE8D9", border: "1.5px solid #DDD5BE" }}>
+                <Heart size={15} fill={wishlist.includes(openProduct.id) ? "#B5502E" : "none"} color="#B5502E" /> {wishlist.includes(openProduct.id) ? "Retirer des favoris" : "Ajouter aux favoris"}
+              </button>
+              <button onClick={() => addToCart(openProduct.id)} className="flex-1 py-2.5 rounded-xl font-bold text-sm" style={{ background: "#B5502E", color: "#fff" }}>Ajouter au panier</button>
+            </div>
+
+            <h3 className="text-sm font-bold mb-2">Avis clients {reviews[openProduct.id]?.length ? `(${reviews[openProduct.id].length})` : ""}</h3>
+            <div className="space-y-2 mb-4">
+              {(reviews[openProduct.id] || []).length === 0 && <div className="text-xs" style={{ color: "#6B6252" }}>Aucun avis pour l'instant.</div>}
+              {(reviews[openProduct.id] || []).map((r) => (
+                <div key={r.id} className="rounded-xl p-3" style={{ background: "#EDE8D9" }}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-bold">{r.author}</span>
+                    <Stars value={r.rating} />
+                  </div>
+                  <div className="text-xs" style={{ color: "#6B6252" }}>{r.comment}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="rounded-xl p-3" style={{ background: "#EDE8D9" }}>
+              <div className="text-xs font-bold mb-2">Laisser un avis</div>
+              <input placeholder="Votre nom" value={reviewForm.author} onChange={(e) => setReviewForm((f) => ({ ...f, author: e.target.value }))} className="w-full p-2 rounded-lg text-sm mb-2" style={{ background: "#F7F3E7", border: "1.5px solid #DDD5BE" }} />
+              <select value={reviewForm.rating} onChange={(e) => setReviewForm((f) => ({ ...f, rating: Number(e.target.value) }))} className="w-full p-2 rounded-lg text-sm mb-2" style={{ background: "#F7F3E7", border: "1.5px solid #DDD5BE" }}>
+                {[5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>{n} étoile{n > 1 ? "s" : ""}</option>)}
+              </select>
+              <textarea placeholder="Votre commentaire" value={reviewForm.comment} onChange={(e) => setReviewForm((f) => ({ ...f, comment: e.target.value }))} className="w-full p-2 rounded-lg text-sm mb-2" style={{ background: "#F7F3E7", border: "1.5px solid #DDD5BE" }} rows={2} />
+              <button onClick={() => submitReview(openProduct.id)} className="w-full py-2 rounded-lg text-sm font-bold" style={{ background: "#201C15", color: "#EDE8D9" }}>Publier l'avis</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cartOpen && (
+        <div className="fixed inset-0 z-30 flex items-end justify-center">
+          <div className="absolute inset-0" style={{ background: "rgba(32,28,21,0.55)" }} onClick={closeCart} />
+          <div className="relative w-full max-w-2xl rounded-t-3xl p-5 max-h-[85vh] overflow-y-auto" style={{ background: "#F7F3E7" }}>
+            <div className="flex items-center justify-between mb-4">
+              <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 800, fontSize: 18 }}>
+                {checkoutStep === 0 && "Votre panier"}
+                {checkoutStep === 1 && "Mode de paiement"}
+                {checkoutStep === 2 && "Instructions de paiement"}
+                {checkoutStep === 3 && "Vos informations"}
+              </div>
+              <button onClick={closeCart} aria-label="Fermer"><X size={22} /></button>
+            </div>
+
+            {checkoutStep === 0 && (
+              <>
+                {cartItems.length === 0 ? (
+                  <div className="text-sm py-8 text-center" style={{ color: "#6B6252" }}>Votre panier est vide. Ajoutez des articles pour commencer.</div>
+                ) : (
+                  <div className="space-y-3 mb-4">
+                    {cartItems.map((i) => (
+                      <div key={i.id} className="flex items-center gap-3">
+                        <ProductThumb p={i} className="w-12 h-12 rounded-lg shrink-0" textSize="text-xl" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-semibold truncate">{i.name}</div>
+                          <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: "#8B4226" }}>{formatFCFA(i.price)}</div>
+                        </div>
+                        <div className="flex items-center gap-1.5" style={{ background: "#201C15", borderRadius: 999, padding: "2px 6px" }}>
+                          <button onClick={() => changeQty(i.id, -1)} aria-label="Retirer un"><Minus size={13} color="#EDE8D9" /></button>
+                          <span style={{ color: "#EDE8D9", fontSize: 12, minWidth: 12, textAlign: "center", fontFamily: "'IBM Plex Mono', monospace" }}>{i.qty}</span>
+                          <button onClick={() => changeQty(i.id, 1)} aria-label="Ajouter un"><Plus size={13} color="#EDE8D9" /></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {cartItems.length > 0 && (
+                  <>
+                    <div className="mb-3">
+                      <label className="text-xs font-semibold block mb-1">Zone de livraison</label>
+                      <select value={zone} onChange={(e) => setZone(e.target.value)} className="w-full p-2.5 rounded-lg text-sm" style={inputStyle}>
+                        {zones.map((z) => <option key={z.zone} value={z.zone}>{z.zone} — {formatFCFA(z.fee)}</option>)}
+                      </select>
+                    </div>
+                    <div className="mb-3">
+                      <label className="text-xs font-semibold block mb-1">Code promo</label>
+                      <div className="flex gap-2">
+                        <input value={promoInput} onChange={(e) => setPromoInput(e.target.value)} placeholder="Ex : BIENVENUE10" className="flex-1 p-2.5 rounded-lg text-sm" style={inputStyle} />
+                        <button onClick={applyPromo} className="px-4 rounded-lg text-sm font-bold" style={{ background: "#2E4374", color: "#fff" }}>OK</button>
+                      </div>
+                      {appliedPromo && <div className="text-[11px] mt-1" style={{ color: "#3C7A4F" }}>Code {appliedPromo.code} appliqué (-{appliedPromo.percent}%)</div>}
+                      {promoError && <div className="text-[11px] mt-1" style={{ color: "#B5502E" }}>{promoError}</div>}
+                    </div>
+                    <div className="border-t pt-3 space-y-1" style={{ borderColor: "#DDD5BE" }}>
+                      <div className="flex items-center justify-between text-sm"><span>Sous-total</span><span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{formatFCFA(subtotal)}</span></div>
+                      {discountAmount > 0 && <div className="flex items-center justify-between text-sm" style={{ color: "#3C7A4F" }}><span>Réduction</span><span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>-{formatFCFA(discountAmount)}</span></div>}
+                      <div className="flex items-center justify-between text-sm"><span>Livraison</span><span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{formatFCFA(deliveryFee)}</span></div>
+                      <div className="flex items-center justify-between text-base font-bold pt-1"><span>Total</span><span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{formatFCFA(grandTotal)}</span></div>
+                    </div>
+                    <button onClick={() => setCheckoutStep(1)} disabled={!canGoToPayment} className="w-full py-3 rounded-xl font-bold text-sm mt-3" style={{ background: "#B5502E", color: "#fff" }}>Continuer</button>
+                  </>
+                )}
+              </>
+            )}
+
+            {checkoutStep === 1 && (
+              <>
+                <div className="rounded-xl p-3 mb-3 text-[11px]" style={{ background: "#EDE8D9", color: "#6B6252" }}>
+                  ℹ️ Pour un paiement mobile, on vous montre les instructions, puis vous confirmez votre commande par message WhatsApp. Pour le paiement à la livraison, vous passez directement à vos informations de livraison.
+                </div>
+                <div className="space-y-2 mb-4">
+                  {PAYMENT_METHODS.map((m) => {
+                    const Icon = m.icon; const selected = payment === m.id;
+                    return (
+                      <button key={m.id} onClick={() => setPayment(m.id)} className="w-full flex items-center gap-3 p-3 rounded-xl text-left" style={{ background: selected ? "#2E4374" : "#EDE8D9", color: selected ? "#fff" : "#201C15", border: selected ? "1.5px solid #2E4374" : "1.5px solid #DDD5BE" }}>
+                        <Icon size={18} />
+                        <div className="flex-1"><div className="text-sm font-semibold">{m.label}</div><div className="text-[11px]" style={{ opacity: 0.75 }}>{m.sub}</div></div>
+                        {selected && <Check size={16} />}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => setCheckoutStep(0)} className="flex-1 py-3 rounded-xl font-bold text-sm" style={{ background: "#EDE8D9", border: "1.5px solid #DDD5BE" }}>Retour</button>
+                  <button onClick={goToNextAfterPayment} disabled={!payment} className="flex-1 py-3 rounded-xl font-bold text-sm" style={{ background: payment ? "#B5502E" : "#DDD5BE", color: "#fff" }}>Continuer</button>
+                </div>
+              </>
+            )}
+
+            {checkoutStep === 2 && payment !== "cod" && (
+              <>
+                <div className="rounded-xl p-4 mb-4" style={{ background: "#EDE8D9" }}>
+                  <div className="text-sm font-bold mb-2">Paiement via {MERCHANT_ACCOUNTS[payment]?.name}</div>
+                  <ol className="text-[12px] space-y-1.5 list-decimal list-inside" style={{ color: "#3B362B" }}>
+                    <li>Envoyez <strong style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{formatFCFA(grandTotal)}</strong> au numéro <strong style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{MERCHANT_ACCOUNTS[payment]?.number}</strong> ({STORE_NAME}).</li>
+                    <li>Gardez le message de confirmation de la transaction.</li>
+                    <li>Cliquez sur "Continuer" pour finaliser votre commande sur WhatsApp.</li>
+                  </ol>
+                </div>
+                <div className="rounded-xl p-3 mb-4 text-[11px]" style={{ background: "#F1E7D6", color: "#6B6252" }}>Votre commande sera confirmée par message WhatsApp après réception du paiement.</div>
+                <div className="flex gap-2">
+                  <button onClick={() => setCheckoutStep(1)} className="flex-1 py-3 rounded-xl font-bold text-sm" style={{ background: "#EDE8D9", border: "1.5px solid #DDD5BE" }}>Retour</button>
+                  <button onClick={() => setCheckoutStep(3)} className="flex-1 py-3 rounded-xl font-bold text-sm" style={{ background: "#B5502E", color: "#fff" }}>Continuer</button>
+                </div>
+              </>
+            )}
+
+            {checkoutStep === 3 && (
+              <>
+                <div className="space-y-3 mb-4">
+                  <div><label className="text-xs font-semibold block mb-1">Nom complet</label><input value={customer.name} onChange={(e) => setCustomer((c) => ({ ...c, name: e.target.value }))} className="w-full p-2.5 rounded-lg text-sm" style={inputStyle} placeholder="Votre nom" /></div>
+                  <div><label className="text-xs font-semibold block mb-1">Téléphone</label><input value={customer.phone} onChange={(e) => setCustomer((c) => ({ ...c, phone: e.target.value }))} className="w-full p-2.5 rounded-lg text-sm" style={inputStyle} placeholder="Ex : 76 00 00 00" /></div>
+                  <div><label className="text-xs font-semibold block mb-1">Adresse de livraison</label><input value={customer.address} onChange={(e) => setCustomer((c) => ({ ...c, address: e.target.value }))} className="w-full p-2.5 rounded-lg text-sm" style={inputStyle} placeholder="Quartier, commune" /></div>
+                </div>
+                <div className="rounded-xl p-3 mb-4 text-[11px]" style={{ background: "#EDE8D9", color: "#6B6252" }}>
+                  {payment === "cod" ? "Votre commande sera confirmée par message WhatsApp. Vous paierez en espèces à la livraison." : "Dernière étape : votre commande sera envoyée sur WhatsApp pour confirmation finale."}
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => setCheckoutStep(payment === "cod" ? 1 : 2)} className="flex-1 py-3 rounded-xl font-bold text-sm" style={{ background: "#EDE8D9", border: "1.5px solid #DDD5BE" }}>Retour</button>
+                  <button onClick={sendToWhatsApp} disabled={!canConfirm} className="flex-[2] py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2" style={{ background: canConfirm ? "#25D366" : "#DDD5BE", color: "#fff" }}><MessageCircle size={16} /> Envoyer ma commande sur WhatsApp</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NewPromoForm({ onAdd }) {
+  const [code, setCode] = useState("");
+  const [percent, setPercent] = useState(10);
+  return (
+    <div className="rounded-xl p-3 flex gap-2" style={card}>
+      <input placeholder="Nouveau code" value={code} onChange={(e) => setCode(e.target.value)} className="flex-1 p-2 rounded-lg text-sm" style={inputStyle} />
+      <input type="number" value={percent} onChange={(e) => setPercent(e.target.value)} className="w-16 p-2 rounded-lg text-sm" style={inputStyle} />
+      <button onClick={() => { onAdd(code, percent); setCode(""); }} className="px-3 rounded-lg text-sm font-bold" style={{ background: "#201C15", color: "#EDE8D9" }}>+</button>
+    </div>
+  );
+}
